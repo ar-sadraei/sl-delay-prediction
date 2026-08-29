@@ -165,7 +165,7 @@ def build_for_date(date, weather):
 
 
 if __name__ == "__main__":
-    dates = ["2024-08-01", "2024-08-02", "2024-08-03"]  # extend this list as needed
+    dates = ["2024-08-01", "2024-08-02", "2024-08-03", "2024-01-16", "2024-02-13"]  # extend this list as needed
 
     weather = pd.read_csv(f"{PROCESSED_DIR}/smhi_temp_clean.csv", parse_dates=["datetime"])
     weather["hour_bucket"] = weather["datetime"].dt.floor("h")
