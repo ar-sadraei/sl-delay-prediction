@@ -141,7 +141,12 @@ def add_features(df):
     df["hour"] = df["scheduled_dt"].dt.hour
     df["weekday"] = df["scheduled_dt"].dt.day_name()
     df["is_rush_hour"] = df["hour"].isin(RUSH_HOURS).astype(int)
-    df["is_delayed"] = (df["delay_seconds"] > DELAY_THRESHOLD_S).astype(int)
+
+    # is_delayed must stay null where delay_seconds is null — don't let a
+    # NaN comparison silently resolve to False (and therefore 0/"on time")
+    df["is_delayed"] = df["delay_seconds"].apply(
+        lambda d: None if pd.isna(d) else int(d > DELAY_THRESHOLD_S)
+    )
     df["delay_minutes"] = df["delay_seconds"] / 60
     return df
 
