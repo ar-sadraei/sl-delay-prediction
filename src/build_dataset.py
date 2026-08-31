@@ -5,6 +5,7 @@ import glob
 import time
 import subprocess
 import zipfile
+import shutil 
 import requests
 import pandas as pd
 from google.transit import gtfs_realtime_pb2
@@ -152,6 +153,11 @@ def add_features(df):
 
 
 def build_for_date(date, weather):
+    daily_path = f"{PROCESSED_DIR}/daily/modeling_table_{date}.parquet"
+    if os.path.exists(daily_path):
+        print(f"--- {date} already processed, skipping ---")
+        return daily_path
+
     print(f"--- {date} ---")
     extract_dir = fetch_koda_realtime(date)
     static_zip = fetch_koda_static(date)
@@ -160,28 +166,48 @@ def build_for_date(date, weather):
     scheduled = join_schedule(delays, static_zip)
     weathered = join_weather(scheduled, date, weather)
     featured = add_features(weathered)
-    featured["service_date"] = date  # the real, fetched service day — not derived from scheduled_dt
-    return featured
+    featured["service_date"] = date
 
+    os.makedirs(f"{PROCESSED_DIR}/daily", exist_ok=True)
+    featured.to_parquet(daily_path, index=False)
+    print(f"  Saved {daily_path}")
+
+    shutil.rmtree(extract_dir, ignore_errors=True)
+    os.remove(f"{RAW_DIR}/tripupdates_{date}.7z")
+    os.remove(static_zip)
+
+    return daily_path
+
+winter_dates = [
+    # December 2023
+    "2023-12-01", "2023-12-04", "2023-12-06", "2023-12-09",
+    "2023-12-12", "2023-12-14", "2023-12-17", "2023-12-20",
+    # January 2024 (skips New Year's/Epiphany period)
+    "2024-01-08", "2024-01-10", "2024-01-13", "2024-01-16",
+    "2024-01-18", "2024-01-21", "2024-01-24", "2024-01-26",
+    # February 2024
+    "2024-02-01", "2024-02-03", "2024-02-06", "2024-02-08",
+    "2024-02-11", "2024-02-13", "2024-02-16", "2024-02-21",
+]
 
 if __name__ == "__main__":
-    dates = ["2024-08-01", "2024-08-02", "2024-08-03", "2024-01-16", "2024-02-13"]  # extend this list as needed
+    dates = winter_dates  # the list above
 
     weather = pd.read_csv(f"{PROCESSED_DIR}/smhi_temp_clean.csv", parse_dates=["datetime"])
     weather["hour_bucket"] = weather["datetime"].dt.floor("h")
 
-    all_days = []
     for date in dates:
         try:
-            all_days.append(build_for_date(date, weather))
+            build_for_date(date, weather)
         except Exception as e:
             print(f"  FAILED for {date}: {e} — skipping this date")
 
-    final = pd.concat(all_days, ignore_index=True)
-    print(f"\nTotal: {len(final)} rows across {len(all_days)}/{len(dates)} dates")
+    daily_files = glob.glob(f"{PROCESSED_DIR}/daily/*.parquet")
+    final = pd.concat([pd.read_parquet(f) for f in daily_files], ignore_index=True)
+    print(f"\nTotal: {len(final)} rows across {len(daily_files)} dates")
 
     dupes = final.duplicated(subset=["trip_id", "stop_id", "stop_sequence", "service_date"], keep=False)
     print(f"Duplicate check: {dupes.sum()} duplicate rows found")
 
     final.to_parquet(f"{PROCESSED_DIR}/modeling_table.parquet", index=False)
-    print("Saved final modeling table.")
+    print("Saved final combined modeling table.")
