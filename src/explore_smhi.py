@@ -45,3 +45,13 @@ for station_key in ["98210", "98230"]:
     print(f"--- Station {station_key} ---")
     for p in station_data.get("period", []):
         print(" ", p["key"], "-", p.get("title", ""), "-", p.get("summary", "")) """
+
+""" for item in version_data["resource"]:
+    if "nederbörd" in item["title"].lower():
+        print(item["key"], "-", item["title"], "-", item.get("summary", "")) """
+
+resp = requests.get(f"https://opendata-download-metobs.smhi.se/api/version/latest/parameter/7/station/98230.json")
+resp.raise_for_status()
+station_data = resp.json()
+for p in station_data.get("period", []):
+    print(" ", p["key"], "-", p.get("title", ""))
