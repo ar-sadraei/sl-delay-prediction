@@ -20,7 +20,7 @@ DELAY_THRESHOLD_S = 180
 RUSH_HOURS = [7, 8, 9, 16, 17, 18]
 
 
-def fetch_koda_realtime(date):
+def fetch_koda_realtime(date, max_retries=10):
     archive_path = f"{RAW_DIR}/tripupdates_{date}.7z"
     extract_dir = f"{RAW_DIR}/tripupdates_{date}/"
     if os.path.exists(extract_dir):
@@ -29,10 +29,14 @@ def fetch_koda_realtime(date):
     url = (f"https://api.koda.trafiklab.se/KoDa/api/v2/gtfs-rt/sl/TripUpdates"
            f"?date={date}&key={KODA_KEY}")
     resp = requests.get(url, timeout=60)
+    retries = 0
     while resp.status_code == 202:
-        print(f"  [{date}] archive generating, waiting 30s...")
+        if retries >= max_retries:
+            raise TimeoutError(f"Archive for {date} still not ready after {max_retries} retries")
+        print(f"  [{date}] archive generating, waiting 30s... (attempt {retries+1}/{max_retries})")
         time.sleep(30)
         resp = requests.get(url, timeout=60)
+        retries += 1
     resp.raise_for_status()
 
     with open(archive_path, "wb") as f:
@@ -44,7 +48,7 @@ def fetch_koda_realtime(date):
 
 def fetch_koda_static(date):
     zip_path = f"{RAW_DIR}/static_{date}.zip"
-    if os.path.exists(zip_path):
+    if os.path.exists(zip_path) and zipfile.is_zipfile(zip_path):
         return zip_path
 
     url = (f"https://api.koda.trafiklab.se/KoDa/api/v2/gtfs-static/sl"
