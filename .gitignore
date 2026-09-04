@@ -15,3 +15,6 @@ data/processed/*
 # OS/editor noise
 .DS_Store
 .ipynb_checkpoints/
+# MLflow local tracking artifacts -- regenerate with src/track_experiments.py
+mlflow.db
+mlruns/
