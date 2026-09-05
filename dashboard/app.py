@@ -22,6 +22,10 @@ API_URL = get_api_url()
 st.set_page_config(page_title="Route 607 Delay Predictor", page_icon="🚌")
 st.title("🚌 Will my 607 be delayed?")
 st.caption("A model trained on 54 winter service days (2021-2026), route 607 Sollentuna.")
+st.caption(
+    "Note: the API runs on a free hosting tier and may take 20-30s to "
+    "wake up on the first request after a period of inactivity."
+)
 
 # --- load stop list from the API, not a local copy -- single source of truth ---
 @st.cache_data(ttl=3600)
