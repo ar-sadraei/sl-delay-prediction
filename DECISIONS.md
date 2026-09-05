@@ -89,3 +89,5 @@ This file documents the non-obvious judgment calls made during this project, and
 
 **Known risk, accepted as-is: RUSH_HOURS is duplicated between src/build_dataset.py and api/main.py.** Nothing currently enforces these stay in sync -- if the rush-hour definition changes in one without the other, the API's feature engineering would silently diverge from what the model was trained on ("training/serving skew"). A more robust fix would share this constant from one place both files import, but is left as a known limitation given both currently match and the project's scope.
 
+
+**Confirmed via the daily ingestion test: KoDA archive availability isn't correlated with how "old" a date is.** 2026-09-04 (the freshest possible date, one day old) succeeded on the first attempt with zero retries, while 2026-08-28 (8 days old) failed after 10 retries/5 minutes. This is consistent with the recurring pattern of occasional bad/delayed archives seen throughout the project (2025-08-01, 2023-12-14, several dates in the route-607 batch) — the 10-retry cap on fetch_koda_realtime is left unchanged, since it isn't a timing/patience issue.
