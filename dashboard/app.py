@@ -9,8 +9,15 @@ layer reusable rather than tied to one specific UI.
 """
 import streamlit as st
 import requests
+import os
 
-API_URL = "http://127.0.0.1:8000"  # swap for the deployed API URL once hosted
+def get_api_url():
+    try:
+        return st.secrets["API_URL"]
+    except (KeyError, FileNotFoundError):
+        return os.getenv("API_URL", "http://127.0.0.1:8000")
+
+API_URL = get_api_url()
 
 st.set_page_config(page_title="Route 607 Delay Predictor", page_icon="🚌")
 st.title("🚌 Will my 607 be delayed?")
