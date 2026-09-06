@@ -19,6 +19,9 @@ PROCESSED_DIR = "data/processed"
 DELAY_THRESHOLD_S = 180
 RUSH_HOURS = [7, 8, 9, 16, 17, 18]
 
+SEVENZIP_BIN = next((b for b in ["7zz", "7z", "7za"] if shutil.which(b)), None)
+if SEVENZIP_BIN is None:
+    raise RuntimeError("No 7-zip binary found (tried 7zz, 7z, 7za).")
 
 def fetch_koda_realtime(date, max_retries=10):
     archive_path = f"{RAW_DIR}/tripupdates_{date}.7z"
@@ -41,8 +44,8 @@ def fetch_koda_realtime(date, max_retries=10):
 
     with open(archive_path, "wb") as f:
         f.write(resp.content)
-    subprocess.run(["7zz", "x", archive_path, f"-o{extract_dir}", "-y"],
-                    check=True, capture_output=True)
+    subprocess.run([SEVENZIP_BIN, "x", archive_path, f"-o{extract_dir}", "-y"],
+                check=True, capture_output=True)
     return extract_dir
 
 
