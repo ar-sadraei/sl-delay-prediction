@@ -3,3 +3,6 @@ pandas-gbq
 pandas
 requests
 python-dotenv
+gtfs-realtime-bindings
+protobuf
+numpy
