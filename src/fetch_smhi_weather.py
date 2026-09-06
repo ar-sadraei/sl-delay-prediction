@@ -2,18 +2,21 @@ import requests
 import pandas as pd
 
 STATION = "98230"
-PERIOD = "corrected-archive"
 
 
-def fetch_smhi_parameter(parameter, label):
+def fetch_smhi_parameter(parameter, label, period="corrected-archive"):
     """
-    Download one SMHI parameter for STATION/PERIOD, find the real header row
+    Download one SMHI parameter for STATION/period, find the real header row
     programmatically (SMHI's metadata header length isn't guaranteed stable),
     keep only the 4 real data columns, and return a clean datetime-indexed
     DataFrame with the value column named `label`.
+
+    period: "corrected-archive" (default) excludes the last ~3 months of
+    quality-controlled history. For anything recent (e.g. "yesterday" in
+    daily_ingest.py), pass period="latest-months" instead.
     """
     url = (f"https://opendata-download-metobs.smhi.se/api/version/latest"
-           f"/parameter/{parameter}/station/{STATION}/period/{PERIOD}/data.csv")
+           f"/parameter/{parameter}/station/{STATION}/period/{period}/data.csv")
 
     resp = requests.get(url)
     resp.raise_for_status()
@@ -49,16 +52,8 @@ if __name__ == "__main__":
     # parameter 7: Nederbördsmängd, summa 1 timme, 1 gång/tim
     precip = fetch_smhi_parameter("7", "precip_mm")
 
-    # outer join: temperature and precipitation can have different gaps in
-    # their hourly records (already confirmed real missing hours exist in
-    # the temperature series) — an outer join keeps every hour either
-    # source has data for, rather than silently dropping rows
     weather = temp.merge(precip, on="datetime", how="outer")
 
-    # rain/snow proxy: SMHI's precipitation field is just an amount, it
-    # doesn't distinguish rain from snow directly — this is a standard,
-    # reasonable derived approximation (precip + temp <= 0C ~= snow),
-    # not a directly-measured field, worth noting as such in DECISIONS.md
     weather["is_snow_proxy"] = ((weather["precip_mm"] > 0) & (weather["temperature_c"] <= 0)).astype(int)
     weather["is_rain_proxy"] = ((weather["precip_mm"] > 0) & (weather["temperature_c"] > 0)).astype(int)
 
