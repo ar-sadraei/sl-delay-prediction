@@ -19,9 +19,12 @@ from build_dataset import fetch_koda_static
 client = bigquery.Client()
 LOOKUP_TABLE = "regal-stone-429421-j0.sl_delays.trip_route_lookup"
 
-all_dates = [r.service_date.isoformat() for r in client.query(
-    "SELECT DISTINCT service_date FROM `regal-stone-429421-j0.sl_delays.combined_delay_data`"
-).result()]
+all_dates_query = """
+SELECT DISTINCT service_date FROM `regal-stone-429421-j0.sl_delays.historical_backfill`
+UNION DISTINCT
+SELECT DISTINCT service_date FROM `regal-stone-429421-j0.sl_delays.daily_all_routes`
+"""
+all_dates = [r.service_date.isoformat() for r in client.query(all_dates_query).result()]
 
 try:
     existing = {r.service_date.isoformat() for r in client.query(
