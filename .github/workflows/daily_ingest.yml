@@ -32,3 +32,8 @@ jobs:
           TRAFIKLAB_KODA_KEY: ${{ secrets.TRAFIKLAB_KODA_KEY }}
           BQ_TABLE: 'regal-stone-429421-j0.sl_delays.daily_all_routes'
         run: python src/daily_ingest.py
+
+      - name: Backfill route types for any new dates
+        env:
+          TRAFIKLAB_KODA_KEY: ${{ secrets.TRAFIKLAB_KODA_KEY }}
+        run: python src/backfill_route_types.py

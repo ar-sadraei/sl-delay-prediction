@@ -124,7 +124,7 @@ def join_schedule(delays_df, static_zip_path):
             on=["trip_id", "stop_id", "stop_sequence"],
         )
         .merge(trips[["trip_id", "route_id"]], on="trip_id")
-        .merge(routes[["route_id", "route_short_name"]], on="route_id")
+        .merge(routes[["route_id", "route_short_name", "route_type"]], on="route_id")  # added route_type
     )
 
 
