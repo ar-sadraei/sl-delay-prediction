@@ -19,22 +19,19 @@ from build_dataset import fetch_koda_static
 client = bigquery.Client()
 LOOKUP_TABLE = "regal-stone-429421-j0.sl_delays.trip_route_lookup"
 
-all_dates_query = """
-SELECT DISTINCT service_date FROM `regal-stone-429421-j0.sl_delays.historical_backfill`
-UNION DISTINCT
-SELECT DISTINCT service_date FROM `regal-stone-429421-j0.sl_delays.daily_all_routes`
+missing_dates_query = """
+SELECT service_date FROM (
+  SELECT DISTINCT service_date FROM `regal-stone-429421-j0.sl_delays.historical_backfill`
+  UNION DISTINCT
+  SELECT DISTINCT service_date FROM `regal-stone-429421-j0.sl_delays.daily_all_routes`
+)
+WHERE service_date NOT IN (
+  SELECT DISTINCT SAFE.PARSE_DATE('%Y-%m-%d', service_date)
+  FROM `regal-stone-429421-j0.sl_delays.trip_route_lookup`
+)
 """
-all_dates = [r.service_date.isoformat() for r in client.query(all_dates_query).result()]
-
-try:
-    existing = {r.service_date.isoformat() for r in client.query(
-        f"SELECT DISTINCT service_date FROM `{LOOKUP_TABLE}`"
-    ).result()}
-except Exception:
-    existing = set()  # table doesn't exist yet on first run
-
-dates_to_process = [d for d in all_dates if d not in existing]
-print(f"{len(dates_to_process)} of {len(all_dates)} dates need route_type backfilled")
+dates_to_process = [r.service_date.isoformat() for r in client.query(missing_dates_query).result()]
+print(f"{len(dates_to_process)} dates need route_type backfilled")
 
 new_rows = []
 for date in dates_to_process:
