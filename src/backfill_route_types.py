@@ -53,10 +53,8 @@ for date in dates_to_process:
 
 if new_rows:
     combined = pd.concat(new_rows, ignore_index=True)
-    job_config = bigquery.LoadJobConfig(
-        write_disposition="WRITE_APPEND" if existing else "WRITE_TRUNCATE"
-    )
-    client.load_table_from_dataframe(combined, LOOKUP_TABLE, job_config=job_config).result()
+    job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND")
+    client.load_table_from_dataframe(combined, LOOKUP_TABLE, job_config=job_config, location="EU").result()
     print(f"\nAppended {len(combined)} rows to {LOOKUP_TABLE}")
 else:
     print("Nothing new to add.")
