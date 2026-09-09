@@ -107,3 +107,12 @@ This file documents the non-obvious judgment calls made during this project, and
 **"Early" is defined as more than 2 minutes ahead of schedule (delay_seconds < -120), distinct from the existing 3-minute "Delayed" threshold (delay_seconds > 180).** Deliberately asymmetric: a bus leaving early risks a missed connection for a passenger arriving at the scheduled time -- a more binary, immediate risk than the graduated inconvenience of lateness -- so a tighter threshold was chosen for "Early" rather than mirroring the delay side exactly.
 
 **Discovered SL and Waxholmsbolaget (the archipelago ferry operator) share route_short_name "11" for two entirely unrelated services.** Built a lightweight, incremental enrichment pipeline (trip_route_lookup) that fetches only the static GTFS feed per date -- not the expensive realtime archive -- to retroactively attach route_type/agency_id to every already-collected row via a SQL join, with no pipeline re-run needed. is_metro is now correctly derived from route_type (401/402) instead of a route_short_name list, and a full transport_mode field (Metro/Bus/Tram/Commuter Rail/Ferry) replaces the original binary split, extending the project's core finding with real category breadth.
+
+## Corrected Phase 3 Headline Finding (post route_type fix)
+
+**Metro vs. non-metro delay rate, recalculated with the corrected is_metro definition (route_type-based, not route_short_name-based):**
+- Metro: 1.70% delayed (3,812,556 trips)
+- Non-metro: 23.50% delayed (53,525,724 trips)
+- Gap: ~13.8x (previously reported as ~11x under the flawed definition)
+
+The corrected gap is larger than originally reported, not smaller -- the misclassified ferry trips (weather-exposed, more variable) had been quietly inflating the "metro" delay rate. The headline finding (mode of transport dominates all other factors) is confirmed and strengthened by this correction, not undermined by it. This is the final, authoritative version of this project's core result.
