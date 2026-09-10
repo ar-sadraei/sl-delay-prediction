@@ -6,6 +6,8 @@ Will my bus be late? This started as a simple question and turned into a full da
 **[Live API docs →](https://sl-delay-prediction.onrender.com/docs)**
 **[Live system-wide dashboard →](https://datastudio.google.com/reporting/f05ed167-1118-40f2-bc73-e9e64b44df23)**
 
+![Route 607 delay prediction app showing a sample prediction](docs/images/streamlit-app.png)
+
 ---
 
 ## The short version
@@ -116,6 +118,12 @@ GitHub Actions, scheduled daily at 06:00 UTC
 | Commuter Rail | 10.66% |
 | Bus | 24.38% |
 | Ferry | 26.8% |
+
+![System-wide dashboard overview with KPI scorecards and live pipeline status](docs/images/dashboard-overview.png)
+
+![Delay rate by route and transport mode](docs/images/dashboard-routes.png)
+
+![Stop-level delay rates with the bubble map](docs/images/dashboard-stops.png)
 
 The full experiment history, including the negative result, lives in MLflow (`src/track_experiments.py`) and in BigQuery through `combined_delay_data`.
 
