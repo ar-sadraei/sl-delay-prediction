@@ -118,3 +118,21 @@ This file documents the non-obvious judgment calls made during this project, and
 The corrected gap is larger than originally reported, not smaller -- the misclassified ferry trips (weather-exposed, more variable) had been quietly inflating the "metro" delay rate. The headline finding (mode of transport dominates all other factors) is confirmed and strengthened by this correction, not undermined by it. This is the final, authoritative version of this project's core result.
 
 **Fixed a silent failure in backfill_route_types.py: a leftover reference to a removed variable (existing) caused the script to successfully build each day's route_type mapping, print a success-looking log, and then crash before ever writing it to BigQuery.** Caught by re-verifying "Other" transport_mode rows after a scheduled run rather than trusting the workflow's green checkmark and 2-second runtime alone -- a fast, clean-looking log turned out to be hiding a crash on the final write step. Fixed by removing the stale existing-based conditional and using unconditional WRITE_APPEND, since trip_route_lookup is permanently past its one-time initial-load state at this point in the project.
+
+## Phase 7: Complete — Automated Ingestion & System-Wide Dashboard
+
+Summary of what this phase actually delivered, for anyone skimming this file rather than reading the full history above:
+
+- A scheduled GitHub Actions workflow (`daily_ingest.yml`, 06:00 UTC) that ingests system-wide delay data daily with zero manual intervention, tested via manual trigger before being trusted on schedule.
+- BigQuery tables with deliberately pinned schemas (not autodetected) -- a real bug (int/float mismatch on nullable proxy columns) was caught specifically because a schema was pinned and enforced, rather than silently re-guessed each day.
+- A dimension-table enrichment pattern (`trip_route_lookup`) that retroactively corrected a real classification bug -- route "11" was silently shared between SL's metro and Waxholmsbolaget's ferry service -- across all historical data with no expensive re-collection, and now self-heals daily as new dates arrive.
+- A live, public Looker Studio dashboard built on the corrected system-wide findings, with working geographic (bubble map), temporal (hour/weekday/season/year), and categorical (route, direction, transport mode) filtering.
+- Three real production bugs found and fixed during this phase, each documented at the point they were found: a client-side date-diffing bottleneck (16 minutes -> 2 seconds), a silent crash hiding behind a fast, clean-looking log, and the route-11 misclassification itself.
+
+**Acceptance criteria, confirmed:**
+- [x] GitHub Actions workflow runs on schedule with no manual intervention
+- [x] BigQuery tables have deliberately pinned schemas, not autodetected
+- [x] Workflow tested via manual trigger before relying on the schedule
+- [x] Looker Studio dashboard built on the system-wide EDA findings, shared with a public link: https://datastudio.google.com/reporting/f05ed167-1118-40f2-bc73-e9e64b44df23
+
+This phase is complete.

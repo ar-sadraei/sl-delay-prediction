@@ -1,134 +1,169 @@
 # 🚌 Route 607 Delay Predictor
 
-Will my bus be late? A real, end-to-end data science project that started as “predict SL delays” and ended up somewhere more specific, more personal, and more honest than that original framing — built on live transit data, real weather history, and a deliberately documented trail of the mistakes, dead ends, and rescopes along the way.
+Will my bus be late? This started as a simple question and turned into a full data science project: live transit data, real weather history, a model that actually ships, and an honest record of every wrong turn along the way.
 
-[**Live demo →**](https://sl-delay-prediction-meygurtasjc6fsysanpkhk.streamlit.app)
-[**Full API docs →**](https://sl-delay-prediction.onrender.com/docs)
+**[Live prediction app →](https://sl-delay-prediction-meygurtasjc6fsysanpkhk.streamlit.app)**
+**[Live API docs →](https://sl-delay-prediction.onrender.com/docs)**
+**[Live system-wide dashboard →](https://datastudio.google.com/reporting/f05ed167-1118-40f2-bc73-e9e64b44df23)**
 
 ---
 
 ## The short version
 
-I take route 607 (Sollentuna, Stockholm) to university most winter mornings. This project builds a model that predicts, for a given stop/time/weather, how likely that trip is to run more than 3 minutes late, and it’s wired into an actual API + web app, not just a notebook.
+I take route 607 from Sollentuna to university most winter mornings, and most winters that bus is unreliable in ways that feel predictable if you ride it enough. So I built a model that predicts, for a given stop, time, and weather, how likely that trip is to run more than 3 minutes late. It's deployed as a real API and a web app, not just a notebook. Alongside it, I built a system-wide analytics dashboard, fed by a pipeline that collects fresh data every single day without me touching it.
 
-**Final model**: gradient boosting classifier, ROC-AUC **0.705** on 11 fully held-out winter dates, trained on 240,665 real trip-stop observations across 54 winter service days (2021–2026).
+The final model is a gradient boosting classifier with a ROC-AUC of 0.705 on 11 fully held-out winter dates, trained on 240,665 real trip-stop observations across 54 winter service days between 2021 and 2026.
 
-**The single strongest finding**: *where* the bus is matters far more than *when* or *what the weather’s doing*. Delay rate varies from 3% to 49% across route 607’s 52 stops, a bigger effect than weather, time of day, or day of week combined.
+The biggest finding in the whole project, and one that got corrected and strengthened partway through after I found a real data quality bug, is that mode of transport dominates everything else. Metro trips run late 1.70% of the time. Buses, 24.4%. Ferries, 26.8%. That gap is far larger than anything weather or time of day did in this dataset.
 
 ---
 
-## The actual story
+## The actual story, because it matters more than the numbers
 
-This project changed shape three times, and each pivot was driven by a real finding, not a plan made in advance:
+This project changed shape more than once, and every pivot came from a real finding or a real bug, not from a plan I wrote in advance.
 
-1. **Started broad**: system-wide SL delay EDA across 23 winter dates. Found that weather roughly doubles delay (confounded with season, documented honestly), rush hour barely moves the *median* delay but meaningfully worsens the *tail* (25% severely delayed vs 18% off-peak), and, the big one → **mode of transport dominates everything**: metro trips run 2.1% delayed vs. 23.7% for buses, an ~11x gap.
-2. **Pivoted to my own commute** (route 607) once that metro/bus finding made a system-wide model feel like the wrong question — I don’t ride the metro, and averaging across 561 routes I never take wasn’t actually useful to me. Rebuilt the pipeline to filter by route, rescoped to winter specifically (motivated by the weather finding), and pulled a fresh, deliberately balanced 54-date sample across the full Stockholm winter temperature range (-14.2°C to 14.6°C).
-3. **A model that barely worked, until one question fixed it.** The first real model (weather + time-of-day features) landed at ROC-AUC ~0.605 — barely better than chance. Then I asked: *“don’t we follow delays between individual stops, not just the whole trip?”* Turned out yes, the data already tracked delay per stop and a quick check showed a **16x delay-rate spread across the route’s 52 stops**. Adding `stop_id` as a feature pushed ROC-AUC to 0.705 and made it the dominant predictor by a wide margin. That single question was worth more than any hyperparameter tuning would have been.
-4. **A negative result, kept and reported.** I also tried predicting *how many minutes* late a trip would be, given that it’s already delayed. It didn’t work — the model’s error (1.82 min) didn’t beat just guessing the average (1.79 min). Rather than force a fake-precise number into the app, that experiment is documented and *not* shipped. It’s logged in MLflow alongside the models that did work.
+**It started broad.** I ran an exploratory analysis of system-wide SL delays across 23 winter dates and found that weather roughly doubles delay, though it's confounded with the season and I say so plainly rather than overselling it. Rush hour barely moves the median delay but meaningfully worsens the tail. And mode of transport dominated everything, though the early version of that finding put metro at 2.1% delayed against 23.7% for everything else, a number I'd later have to revisit.
 
-Every real decision, bug, and dead end along the way, including a corrupted archive discovered by cross-checking three independent tools, a silent mislabeling bug where “unknown delay” was defaulting to “on time,” and a training/serving-skew investigation that turned out to be a false alarm is documented in [**DECISIONS.md**](DECISIONS.md).
+**Then I made it personal.** Once the metro versus bus gap made a system wide model feel like the wrong question (I don't ride the metro, and averaging across hundreds of routes I never take wasn't useful to me) I rebuilt the pipeline around my own route and scoped it to winter, since that's when the delays actually bother me.
+
+**The first real model barely worked, until one question fixed it.** Weather and time of day alone got me a ROC-AUC of about 0.605, basically a coin flip with extra steps. Then I asked myself whether the data tracked delay at every stop along a trip, not just the trip as a whole. It turned out it did, and once I checked, I found a 16x spread in delay rate across the route's 52 stops. Adding stop_id as a feature pushed the ROC-AUC to 0.705.
+
+**I also tried something that didn't work, and I kept it in the writeup anyway.** Predicting exactly how many minutes late a trip would be, given that it was already delayed, just didn't hold up. The model's error didn't beat simply guessing the average. Rather than force a falsely precise number into the app, I documented the failure and left it out.
+
+**Finally, building a proper data pipeline exposed a bug in my own headline finding.** I wanted to demonstrate a real ELT workflow, so I built an automated pipeline and a BigQuery backed dashboard. While digging into it, I noticed something strange: a "metro" route on my dashboard included archipelago place names like Kvarnholmen and Fjäderholmarna, which have nothing to do with the subway. It turned out that route number "11" was shared by two completely unrelated GTFS routes from two different agencies, SL's actual metro Blue Line and a ferry operated by Waxholmsbolaget. My original classification had been silently blending ferry trips into the metro numbers since the very first analysis. I fixed it properly, with a real dimension table joined against every trip rather than a hardcoded list of route numbers, and it corrected years of historical data without needing to re-collect anything. The corrected number for metro delay, 1.70%, is actually lower than what I'd originally reported, because the misclassified ferry trips had been dragging it up the whole time.
+
+Every real decision, bug, and dead end along the way, including a corrupted archive I only found by cross-checking three separate tools, a silent bug where unknown delays were defaulting to "on time," a training and serving mismatch that turned out to be a false alarm, and the route 11 mixup above, is written up in **[DECISIONS.md](DECISIONS.md)**.
 
 ---
 
 ## Architecture
 
+**Personal commute prediction (Phases 1 through 5):**
 ```
-Trafiklab (GTFS static + realtime)  ─┐
-KoDa (historical archives, 2021-26) ─┼─► build_dataset.py ─► modeling_table_route607.parquet
-SMHI (temperature + precipitation)  ─┘         │
-                                                ▼
-                                    03_route607_modeling.ipynb
-                                    (EDA → baselines → LR → GBM →
-                                     +stop_id → severity regression)
-                                                │
-                                                ▼
-                                    export_model.py / export_stop_metadata.py
-                                                │
-                                                ▼
-                              api/main.py (FastAPI)  ◄──  track_experiments.py (MLflow)
-                                                │
-                                                ▼
-                              dashboard/app.py (Streamlit, calls the API over HTTP)
+Trafiklab (GTFS static + realtime)
+KoDa (historical archives, 2021 to 2026)         ─► build_dataset.py ─► modeling_table_route607.parquet
+SMHI (temperature + precipitation)                         │
+                                                             ▼
+                                              03_route607_modeling.ipynb
+                                                             │
+                                                             ▼
+                            api/main.py (FastAPI)  ◄──  track_experiments.py (MLflow)
+                                                             │
+                                                             ▼
+                            dashboard/app.py (Streamlit, calls the API over HTTP)
 ```
 
-The API and UI are deliberately separate services the Streamlit app never loads the model directly, it calls the FastAPI service the same way any other client would. This is the actual pattern used in production ML systems: the model-serving layer is a reusable service, not glued to one specific frontend.
+**System-wide automated pipeline and dashboard (Phase 7):**
+```
+GitHub Actions, scheduled daily at 06:00 UTC
+        │
+        ├─► daily_ingest.py            ► BigQuery: daily_all_routes (live, growing every day)
+        │
+        └─► backfill_route_types.py    ► BigQuery: trip_route_lookup (route_type, direction_id)
+                                                             │
+        historical_backfill (a 93 date, ────────────────────┤
+        balanced, year round sample)                        ▼
+                                          combined_delay_data (a view that unions both tables
+                                          and joins in route_type to derive transport_mode,
+                                          is_metro, punctuality_status, and season)
+                                                             │
+                                                             ▼
+                    route_delay_summary, temp_delay_summary, stop_delay_summary
+                                                             │
+                                                             ▼
+                                     Looker Studio, the live public dashboard
+```
+
+`combined_delay_data` and everything downstream of it are views, not tables that need rebuilding. They recompute on every query, so the dashboard reflects new data the moment the daily pipeline adds it.
 
 ---
 
 ## Tech stack
 
 | Layer | Tools |
-| --- | --- |
-| Data ingestion | `requests`, GTFS-realtime protobuf decoding, 7-zip extraction |
-| Data engineering | `pandas`, per-date checkpointing to manage disk footprint at scale |
-| Modeling | `scikit-learn` (LogisticRegression, HistGradientBoostingClassifier/Regressor) |
+|---|---|
+| Data ingestion | `requests`, GTFS realtime protobuf decoding, 7-zip extraction |
+| Data engineering | `pandas`, per-date checkpointing at scale |
+| Modeling | `scikit-learn` (LogisticRegression, HistGradientBoostingClassifier and Regressor) |
 | Experiment tracking | `MLflow` |
-| Serving | `FastAPI`, `Pydantic` for input validation |
+| Serving | `FastAPI`, `Pydantic` |
 | Frontend | `Streamlit` |
-| Deployment | `Docker` |
-| Data sources | [Trafiklab](https://www.trafiklab.se/) (GTFS Regional + KoDa), [SMHI](https://www.smhi.se/data/oppna-data) |
+| Deployment | `Docker`, Render, Streamlit Community Cloud |
+| Warehouse and ELT | `BigQuery` (dimension table pattern, views, scheduled enrichment) |
+| Automation | `GitHub Actions` (a scheduled, self healing daily pipeline) |
+| BI and analytics | `Looker Studio` |
+| Data sources | [Trafiklab](https://www.trafiklab.se/) (GTFS Regional and KoDa), [SMHI](https://www.smhi.se/data/oppna-data) |
 
 ---
 
 ## Key results
 
+**Personal model, route 607:**
+
 | Model | ROC-AUC | Notes |
-| --- | --- | --- |
-| Majority-class baseline | (77.1% accuracy) | Always predict “not delayed” |
-| Logistic regression (weather + time only) | 0.6065 |  |
-| Gradient boosting (weather + time only) | 0.6052 | Near-tie with LR — added complexity didn’t help yet |
-| **Gradient boosting + stop_id (shipped)** | **0.7047** | stop_id is the dominant feature (permutation importance 0.065, vs. 0.026 for hour) |
-| Delay-severity regression (minutes, given delayed) | Not shipped | MAE 1.82 vs. 1.79 naive baseline — genuine negative result |
+|---|---|---|
+| Majority class baseline | (77.1% accuracy) | Always predict "not delayed" |
+| Gradient boosting, weather and time only | 0.6052 | Nearly tied with logistic regression |
+| **Gradient boosting with stop_id, shipped** | **0.7047** | stop_id is the dominant feature |
+| Delay severity regression, minutes | Not shipped | A genuine negative result, documented rather than hidden |
 
-Full experiment history, including the negative result, is tracked in MLflow (`src/track_experiments.py`).
+**System-wide, corrected, from the live dashboard:**
 
-**Known limitations** (see DECISIONS.md for the complete list):
+| Mode | Delay rate |
+|---|---|
+| Metro | 1.70% |
+| Tram | 4.8% |
+| Commuter Rail | 10.66% |
+| Bus | 24.38% |
+| Ferry | 26.8% |
 
-- Only 54 dates total; the coldest band (below -10°C) has just 5 independent days — extreme-cold predictions rest on thin evidence.
-- Route 607’s stability across 2021–2026 was checked (route_id and stop count identical) but trip frequency has drifted slightly.
-- The weather/delay association from the original 23-date EDA is confounded with season (winter vs. summer dates never overlap in temperature) a real association, not a proven causal weather effect.
+The full experiment history, including the negative result, lives in MLflow (`src/track_experiments.py`) and in BigQuery through `combined_delay_data`.
+
+**Known limitations**, with the full list in DECISIONS.md:
+- The personal model's coldest training band, below negative 10 Celsius, rests on only 5 independent days.
+- In the 93 date system-wide sample, the extreme temperature bands are thin, just 5 dates below negative 10 and only 1 above 25 Celsius. Findings in the common range, roughly negative 10 to 25 Celsius, rest on much stronger evidence.
+- As live daily collection keeps growing, the system-wide sample will slowly shift from being deliberately balanced across temperature bands toward being naturally weighted by how often those temperatures actually occur. That's an expected, documented evolution, not a flaw.
 
 ---
 
 ## Running it locally
 
-**1. Set up environment variables** (`.env`, gitignored):
-
+**1. Set environment variables** in a gitignored `.env` file:
 ```
 TRAFIKLAB_STATIC_KEY=...
 TRAFIKLAB_REALTIME_KEY=...
 TRAFIKLAB_KODA_KEY=...
 ```
 
-**2. Rebuild the dataset** (optional — the trained model is already committed under `api/artifacts/`):
-
+**2. Rebuild the personal model's dataset**, optional since the trained model is already committed under `api/artifacts/`:
 ```bash
 python src/build_dataset.py
 ```
 
 **3. Run the API:**
-
 ```bash
 uvicorn api.main:app --reload
 ```
 
-Interactive docs at `http://127.0.0.1:8000/docs`.
-
-**4. Run the dashboard** (with the API already running):
-
+**4. Run the dashboard:**
 ```bash
 streamlit run dashboard/app.py
 ```
 
 **5. Or run the API in Docker:**
-
 ```bash
 docker build -t route607-api .
 docker run -p 8000:8000 route607-api
 ```
 
-**6. Browse experiment history:**
+**6. Run the system-wide pipeline**, which needs a GCP project and BigQuery dataset (setup notes are in DECISIONS.md):
+```bash
+python src/daily_ingest.py
+python src/backfill_route_types.py
+```
+Both of these already run automatically every day through `.github/workflows/daily_ingest.yml`.
 
+**7. Browse the experiment history:**
 ```bash
 mlflow ui
 ```
@@ -137,10 +172,10 @@ mlflow ui
 
 ## Data attribution
 
-Public transport data from [Trafiklab](https://www.trafiklab.se/) (GTFS Regional Static/Realtime, KoDa historical archives), sourced from Storstockholms Lokaltrafik (SL). Weather data from [SMHI](https://www.smhi.se/data/oppna-data) open data, CC0-licensed.
+Public transport data comes from [Trafiklab](https://www.trafiklab.se/) (GTFS Regional Static and Realtime, plus the KoDa historical archives), sourced from Storstockholms Lokaltrafik and Waxholmsbolaget. Weather data comes from [SMHI](https://www.smhi.se/data/oppna-data) open data, which is CC0 licensed.
 
 ---
 
 ## Project history
 
-See [**DECISIONS.md**](DECISIONS.md) for the complete, honest log of every real decision, bug, and dead end across all five phases from choosing a temperature parameter out of nine near-identical SMHI options, to a corrupted archive found by cross-checking three independent 7z implementations, to why a training/serving-skew investigation turned out to be a false alarm.
+**[DECISIONS.md](DECISIONS.md)** has the complete, honest log of every real decision, bug, and dead end across all seven phases of this project. It covers things like choosing a temperature parameter out of nine nearly identical SMHI options, a route number collision between a metro line and a ferry that quietly corrupted the project's headline finding for months, and why a training and serving mismatch I was worried about turned out to be nothing.
