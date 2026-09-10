@@ -25,8 +25,7 @@ with zipfile.ZipFile("data/raw/sl_static_for_stopnames.zip") as z:
     stops = pd.read_csv(z.open("stops.txt"))
 
 stops["stop_id"] = stops["stop_id"].astype(str)
-# GTFS occasionally has duplicate stop_id rows (rare, but real) -- keep one
-stops_clean = stops[["stop_id", "stop_name"]].drop_duplicates(subset="stop_id")
+stops_clean = stops[["stop_id", "stop_name", "stop_lat", "stop_lon"]].drop_duplicates(subset="stop_id")
 print(f"{len(stops_clean)} unique stops found system-wide")
 
 client = bigquery.Client()
