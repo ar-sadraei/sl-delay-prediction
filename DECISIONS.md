@@ -136,3 +136,40 @@ Summary of what this phase actually delivered, for anyone skimming this file rat
 - [x] Looker Studio dashboard built on the system-wide EDA findings, shared with a public link: https://datastudio.google.com/reporting/f05ed167-1118-40f2-bc73-e9e64b44df23
 
 This phase is complete.
+
+## Phase 8: A Surprise BigQuery Bill, and Freezing the Project
+
+**The daily pipeline started failing on September 17 with `403 billingNotEnabled`, and the cause turned out to be a bill, not a bug.** The ingestion code was fine: it fetched KoDa and SMHI data and built ~370k rows every day, then failed only on the final BigQuery write. The project had dropped to BigQuery sandbox mode after its billing account was unlinked, and sandbox refuses writes to tables with no expiration (it requires every table to expire within 60 days). The unlinking itself followed a ₺479.28 (~$11-12) charge for BigQuery "Analysis", almost all of it on September 9 and 10.
+
+**Traced to the Looker Studio dashboard via `INFORMATION_SCHEMA.JOBS`, not guessed.** The auto-generated SQL (`clmn0_`, `t0_D1804...` aliases) identified every expensive job as a dashboard chart query running under the owner's credentials. Per-day totals:
+
+| Date | Queries | TB billed |
+|---|---|---|
+| Sep 6 | 57 | 0.06 |
+| Sep 7 | 472 | 0.39 |
+| Sep 8 | 162 | 0.27 |
+| Sep 9 | 534 | 1.59 |
+| Sep 10 | 171 | 0.53 |
+
+About 1,400 queries and 2.84 TB in five days, all while building the dashboard. The first 1 TB each month is free and the rest was billed at on-demand rates, which matches the invoice.
+
+**Root cause: the Phase 7 decision to make every summary a view.** No single query was expensive (6-7 GB, a few cents), but a view is not stored data. Every chart load re-ran the full `combined_delay_data` union plus the `trip_route_lookup` join over ~62M raw rows. Dry-run cost per query against each dashboard source:
+
+| Dashboard source | Scanned per query |
+|---|---|
+| `stop_delay_summary` | 7.1 GB |
+| `route_delay_summary` | 5.4 GB |
+| `route_direction_labels` | 4.0 GB |
+| `temp_delay_summary` | 3.4 GB |
+| `route_departures_daily` | 2.9 GB |
+
+The Phase 7 entry above describes these views as "recomputed on every query" as a *feature* (always fresh, no rebuild step). That's true, and it's also exactly why cost scaled with every filter click and every page view. A second, quieter risk: the dashboard is public and runs on owner's credentials, so every visitor's page load would have been billed to me.
+
+**The fix I designed but chose not to build: materialized summary tables, refreshed incrementally.** `route_delay_summary` is only 766k rows and `temp_delay_summary` 52k, so as tables their chart queries drop from GBs to tens of MB. `stop_delay_summary` was the hard one: at 26.8M rows (date x hour x stop x route x direction), a probe table measured 5.3 GB and still scanned 0.8-1.5 GB per chart query. Dropping `hour` would have cut it 11x to 2.4M rows. Together with partitioning the raw tables by `service_date` (so each night's refresh touches one day, not all history), a daily query quota cap, and a 12-hour Looker Studio cache, this would have kept the project inside BigQuery's free tier with a hard ceiling.
+
+**Decision: freeze the project instead.** Even a near-zero, capped bill needs a billing account attached, and the budget for a portfolio project is exactly zero. With no billing account, Google has nothing to charge, and exceeding a free limit just makes queries fail. So:
+- The `Daily SL Delay Ingestion` workflow is disabled (not deleted; the code is unchanged and can be re-enabled).
+- Data is frozen at 93 historical dates plus 11 live days (2026-09-05 to 2026-09-15).
+- The BigQuery project stays in sandbox with no billing account. The existing tables (9.65 GB, under the 10 GB free storage) keep serving the dashboard as long as Google's sandbox allows, and the README screenshots preserve it regardless.
+
+**Lesson worth keeping:** in a pay-per-byte-scanned warehouse, a BI tool on top of views multiplies cost by (charts per page x filter changes x viewers). "Always fresh" views are fine for ad-hoc analysis. Anything a dashboard reads should be a small, pre-aggregated table. And a cost guardrail (quota cap plus budget alert) belongs in place *before* the first dashboard query, not after the first invoice.
