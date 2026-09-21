@@ -4,7 +4,9 @@ Will my bus be late? This started as a simple question and turned into a full da
 
 **[Live prediction app →](https://sl-delay-prediction-meygurtasjc6fsysanpkhk.streamlit.app)**
 **[Live API docs →](https://sl-delay-prediction.onrender.com/docs)**
-**[Live system-wide dashboard →](https://datastudio.google.com/reporting/f05ed167-1118-40f2-bc73-e9e64b44df23)**
+**[System-wide dashboard →](https://datastudio.google.com/reporting/f05ed167-1118-40f2-bc73-e9e64b44df23)** (frozen, see below)
+
+> **Project status: frozen as of September 16, 2026.** The daily ingestion pipeline is paused and the BigQuery project runs with no billing account attached, so it can never generate a charge. The system-wide data covers 93 historical dates plus 11 days of live collection (Sep 5–15, 2026). The dashboard stays up on that frozen data for as long as Google's free sandbox keeps serving it, and the screenshots under [Key results](#key-results) record it either way. Why the project was frozen is a story of its own: [a surprise BigQuery bill, traced and explained](DECISIONS.md#phase-8-a-surprise-bigquery-bill-and-freezing-the-project).
 
 ![Route 607 delay prediction app showing a sample prediction](docs/images/streamlit-app.png)
 
@@ -12,7 +14,7 @@ Will my bus be late? This started as a simple question and turned into a full da
 
 ## The short version
 
-I take route 607 from Sollentuna to university most winter mornings, and most winters that bus is unreliable in ways that feel predictable if you ride it enough. So I built a model that predicts, for a given stop, time, and weather, how likely that trip is to run more than 3 minutes late. It's deployed as a real API and a web app, not just a notebook. Alongside it, I built a system-wide analytics dashboard, fed by a pipeline that collects fresh data every single day without me touching it.
+I take route 607 from Sollentuna to university most winter mornings, and most winters that bus is unreliable in ways that feel predictable if you ride it enough. So I built a model that predicts, for a given stop, time, and weather, how likely that trip is to run more than 3 minutes late. It's deployed as a real API and a web app, not just a notebook. Alongside it, I built a system-wide analytics dashboard, fed by a pipeline that collected fresh data every day without me touching it, until I froze the project to keep it at zero cost.
 
 The final model is a gradient boosting classifier with a ROC-AUC of 0.705 on 11 fully held-out winter dates, trained on 240,665 real trip-stop observations across 54 winter service days between 2021 and 2026.
 
@@ -76,7 +78,7 @@ GitHub Actions, scheduled daily at 06:00 UTC
                                      Looker Studio, the live public dashboard
 ```
 
-`combined_delay_data` and everything downstream of it are views, not tables that need rebuilding. They recompute on every query, so the dashboard reflects new data the moment the daily pipeline adds it.
+`combined_delay_data` and everything downstream of it are views, not tables that need rebuilding. They recompute on every query, so the dashboard reflects new data the moment the daily pipeline adds it. That convenience turned out to be expensive: every chart load re-scanned several GB of raw data, which is what caused the bill described in DECISIONS.md.
 
 ---
 
@@ -130,7 +132,7 @@ The full experiment history, including the negative result, lives in MLflow (`sr
 **Known limitations**, with the full list in DECISIONS.md:
 - The personal model's coldest training band, below negative 10 Celsius, rests on only 5 independent days.
 - In the 93 date system-wide sample, the extreme temperature bands are thin, just 5 dates below negative 10 and only 1 above 25 Celsius. Findings in the common range, roughly negative 10 to 25 Celsius, rest on much stronger evidence.
-- As live daily collection keeps growing, the system-wide sample will slowly shift from being deliberately balanced across temperature bands toward being naturally weighted by how often those temperatures actually occur. That's an expected, documented evolution, not a flaw.
+- Had live daily collection continued, the system-wide sample would have slowly shifted from being deliberately balanced across temperature bands toward being naturally weighted by how often those temperatures actually occur. That would have been an expected, documented evolution, not a flaw. With collection frozen after 11 live days, the sample is still essentially the deliberately balanced 93-date backfill.
 
 ---
 
@@ -169,7 +171,7 @@ docker run -p 8000:8000 route607-api
 python src/daily_ingest.py
 python src/backfill_route_types.py
 ```
-Both of these already run automatically every day through `.github/workflows/daily_ingest.yml`.
+These ran automatically every day through `.github/workflows/daily_ingest.yml`. The workflow is now disabled on GitHub (the project is frozen); re-enable it under Actions if you fork this with your own GCP project.
 
 **7. Browse the experiment history:**
 ```bash
